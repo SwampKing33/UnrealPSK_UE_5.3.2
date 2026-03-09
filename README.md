@@ -2,7 +2,9 @@ UnrealPSKPSKA
 
 --------------
 
-A PSK importer for Unreal Engine 5.3.2 (PSKA does not work so use UEFormat plugin and .ueanim for this.
+A PSK importer for Unreal Engine 5.3.2 
+
+(PSKA does not work so use UEFormat plugin and .ueanim for that)
 
 
 *This plugin imports vertex colours correctly in UE 5.3.2, whereas .uemodel does not. Ideal combo = .pskx + .ueanim for most complete data*
