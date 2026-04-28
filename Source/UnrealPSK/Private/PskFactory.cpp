@@ -1,7 +1,7 @@
 #include "PskFactory.h"
 
 #include "IMeshBuilderModule.h"
-#include "PskPsaUtils.h"
+#include "PskUtils.h"
 #include "PskReader.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Materials/MaterialInstanceConstant.h"
@@ -10,10 +10,13 @@
 #include "Rendering/SkeletalMeshModel.h"
 #include "Engine/SkinnedAssetCommon.h"
 
-UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString> MaterialNameToPathMap)
+UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString> MaterialNameToPathMap, USkeleton* ExistingSkeleton, bool bCreateMaterialInstances)
 {
 	auto Data = FPskReader(Filename);
 	if (!Data.bIsValid) return nullptr;
+	const FString RootAssetName = Name.ToString();
+	const FString ImportFolder = FPskUtils::ResolveImportFolder(Parent, RootAssetName);
+	const FString RootAssetPackagePath = FPskUtils::ResolveRootAssetPackagePath(Parent, RootAssetName);
 
 	TArray<FColor> VertexColorsByPoint;
 	VertexColorsByPoint.Init(FColor::Black, Data.VertexColors.Num());
@@ -118,19 +121,22 @@ UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FNa
 		SkeletalMeshImportData::FMaterial Material;
 		Material.MaterialImportName = PskMaterial.MaterialName;
 
-		UObject* MatParent;
-		auto FoundMaterialPath = MaterialNameToPathMap.Find(*Material.MaterialImportName);
-		if (FoundMaterialPath != nullptr)
+		if (bCreateMaterialInstances)
 		{
-			MatParent = CreatePackage(**FoundMaterialPath);
+			UObject* MatParent;
+			auto FoundMaterialPath = MaterialNameToPathMap.Find(*Material.MaterialImportName);
+			if (FoundMaterialPath != nullptr)
+			{
+				MatParent = CreatePackage(**FoundMaterialPath);
+			}
+			else
+			{
+				MatParent = CreatePackage(*FPaths::Combine(ImportFolder, PskMaterial.MaterialName));
+			}
+			
+			auto MaterialAdd = FPskUtils::LocalFindOrCreateInPackage<UMaterialInstanceConstant>(UMaterialInstanceConstant::StaticClass(), MatParent->GetPathName(), PskMaterial.MaterialName, Flags);
+			Material.Material = MaterialAdd;
 		}
-		else
-		{
-			MatParent = Parent;
-		}
-		
-		auto MaterialAdd = FPskPsaUtils::LocalFindOrCreate<UMaterialInstanceConstant>(UMaterialInstanceConstant::StaticClass(), MatParent, PskMaterial.MaterialName, Flags);
-		Material.Material = MaterialAdd;
 		SkeletalMeshImportData.Materials.Add(Material);
 	}
 	
@@ -143,7 +149,17 @@ UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FNa
 	SkeletalMeshImportData.NumTexCoords = 1 + Data.ExtraUVs.Num(); 
 	SkeletalMeshImportData.bUseT0AsRefPose = false;
 	
-	const auto Skeleton = FPskPsaUtils::LocalCreate<USkeleton>(USkeleton::StaticClass(), Parent,  Name.ToString().Append("_Skeleton"), Flags);
+	const FString SkeletonName = RootAssetName + TEXT("_Skeleton");
+	USkeleton* Skeleton = ExistingSkeleton;
+	const bool bCreatedSkeleton = Skeleton == nullptr;
+	if (!Skeleton)
+	{
+		Skeleton = FPskUtils::LocalCreateInPackage<USkeleton>(USkeleton::StaticClass(), FPaths::Combine(ImportFolder, SkeletonName), SkeletonName, Flags);
+	}
+	if (!Skeleton)
+	{
+		return nullptr;
+	}
 
 	FReferenceSkeleton RefSkeleton;
 	auto SkeletalDepth = 0;
@@ -159,7 +175,7 @@ UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FNa
 	FSkeletalMeshLODModel LODModel;
 	LODModel.NumTexCoords = FMath::Max<uint32>(1, SkeletalMeshImportData.NumTexCoords);
 	
-	const auto SkeletalMesh = FPskPsaUtils::LocalCreate<USkeletalMesh>(USkeletalMesh::StaticClass(), Parent, Name.ToString(), Flags);
+	const auto SkeletalMesh = FPskUtils::LocalCreateInPackage<USkeletalMesh>(USkeletalMesh::StaticClass(), RootAssetPackagePath, RootAssetName, Flags);
 	SkeletalMesh->PreEditChange(nullptr);
 	SkeletalMesh->InvalidateDeriveDataCacheGUID();
 	SkeletalMesh->UnregisterAllMorphTarget();
@@ -204,33 +220,57 @@ UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FNa
 		SkeletalMesh->GetMaterials().Add(FSkeletalMaterial(Material.Material.Get()));
 	}
 
-	// currently not working
 	if (Data.bHasMorphData)
 	{
-		auto DataPosition = 0;
-		
-		for (auto [Name, VertexCount] : Data.MorphInfos)
+		const FSkeletalMeshLODModel& BuiltLODModel = SkeletalMesh->GetImportedModel()->LODModels[0];
+		const TArray<uint32>& RawPointIndices = BuiltLODModel.GetRawPointIndices();
+		TMultiMap<int32, uint32> PointToVertexIndices;
+		for (uint32 VertexIndex = 0; VertexIndex < static_cast<uint32>(RawPointIndices.Num()); ++VertexIndex)
 		{
-			auto MorphTarget = NewObject<UMorphTarget>(SkeletalMesh, Name);
-			
-			TArray<FMorphTargetDelta> Deltas;
-			for (auto i = DataPosition; i < DataPosition + VertexCount; i++)
-			{
-				auto [PositionDelta, TangentZDelta, PointIdx] = Data.MorphDatas[i];
-				
-				FMorphTargetDelta Delta;
-				Delta.PositionDelta = PositionDelta;
-				Delta.TangentZDelta = TangentZDelta;
-				Delta.SourceIdx = PointIdx;
-				Deltas.Add(Delta);
-			}
-			MorphTarget->PopulateDeltas(Deltas, 0, LODModel.Sections);
-			MorphTarget->BaseSkelMesh = SkeletalMesh;
-			SkeletalMesh->GetMorphTargets().Add(MorphTarget);
-			DataPosition += VertexCount;
+			PointToVertexIndices.Add(static_cast<int32>(RawPointIndices[VertexIndex]), VertexIndex);
 		}
-		
-		SkeletalMesh->InitMorphTargetsAndRebuildRenderData();
+
+		bool bRegisteredMorphTargets = false;
+		int32 DataPosition = 0;
+		for (const auto& MorphInfo : Data.MorphInfos)
+		{
+			const FString MorphName = UTF8_TO_TCHAR(MorphInfo.Name);
+			UMorphTarget* MorphTarget = NewObject<UMorphTarget>(SkeletalMesh, FName(*MorphName));
+			TArray<FMorphTargetDelta> Deltas;
+			Deltas.Reserve(MorphInfo.VertexCount);
+			for (int32 i = DataPosition; i < DataPosition + MorphInfo.VertexCount && i < Data.MorphDatas.Num(); ++i)
+			{
+				const auto& MorphData = Data.MorphDatas[i];
+
+				TArray<uint32> VertexIndices;
+				PointToVertexIndices.MultiFind(MorphData.PointIdx, VertexIndices);
+				if (VertexIndices.Num() == 0 && RawPointIndices.IsValidIndex(MorphData.PointIdx))
+				{
+					VertexIndices.Add(static_cast<uint32>(MorphData.PointIdx));
+				}
+
+				for (uint32 VertexIndex : VertexIndices)
+				{
+					FMorphTargetDelta Delta;
+					Delta.PositionDelta = FVector3f(MorphData.PositionDelta.X, -MorphData.PositionDelta.Y, MorphData.PositionDelta.Z);
+					Delta.TangentZDelta = FVector3f(MorphData.TangentZDelta.X, -MorphData.TangentZDelta.Y, MorphData.TangentZDelta.Z);
+					Delta.SourceIdx = VertexIndex;
+					Deltas.Add(Delta);
+				}
+			}
+
+			MorphTarget->PopulateDeltas(Deltas, 0, BuiltLODModel.Sections, true, false, 0.0f);
+			if (MorphTarget->HasValidData())
+			{
+				bRegisteredMorphTargets |= SkeletalMesh->RegisterMorphTarget(MorphTarget, false);
+			}
+			DataPosition += MorphInfo.VertexCount;
+		}
+
+		if (bRegisteredMorphTargets)
+		{
+			SkeletalMesh->InitMorphTargetsAndRebuildRenderData();
+		}
 	}
 	
 	SkeletalMesh->PostEditChange();
@@ -242,7 +282,10 @@ UObject* UPskFactory::Import(const FString& Filename, UObject* Parent, const FNa
 	SkeletalMesh->MarkPackageDirty();
 
 	Skeleton->PostEditChange();
-	FAssetRegistryModule::AssetCreated(Skeleton);
+	if (bCreatedSkeleton)
+	{
+		FAssetRegistryModule::AssetCreated(Skeleton);
+	}
 	Skeleton->MarkPackageDirty();
 
 	return SkeletalMesh;

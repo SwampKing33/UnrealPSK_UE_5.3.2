@@ -4,8 +4,10 @@
 #include "Factories/Factory.h"
 #include "PskFactory.generated.h"
 
+class USkeleton;
+
 UCLASS()
-class UNREALPSKPSA_API UPskFactory : public UFactory
+class UNREALPSK_API UPskFactory : public UFactory
 {
 	GENERATED_BODY()
 public:
@@ -20,7 +22,7 @@ public:
 	}
 	
 	static UObject* Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString>
-	                       MaterialNameToPathMap);
+	                       MaterialNameToPathMap, USkeleton* ExistingSkeleton = nullptr, bool bCreateMaterialInstances = true);
 	static void ProcessSkeleton(const FSkeletalMeshImportData&    ImportData,
 								const USkeleton*                  Skeleton,
 								FReferenceSkeleton&               OutRefSkeleton,
@@ -39,7 +41,7 @@ protected:
 	
 	virtual UObject* FactoryCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const FString& Filename, const TCHAR* Params, FFeedbackContext* Warn, bool& bOutOperationCanceled) override
 	{
-		return Import(Filename, InParent, FName(*InName.ToString().Replace(TEXT("_LOD0"), TEXT(""))), Flags, TMap<FString, FString>());
+		return Import(Filename, InParent, FName(*InName.ToString().Replace(TEXT("_LOD0"), TEXT(""))), Flags, TMap<FString, FString>(), nullptr, true);
 	}
 	
 };

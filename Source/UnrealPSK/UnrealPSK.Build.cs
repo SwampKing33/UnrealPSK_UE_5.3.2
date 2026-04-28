@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class UnrealPSKPSA : ModuleRules
+public class UnrealPSK : ModuleRules
 {
-	public UnrealPSKPSA(ReadOnlyTargetRules Target) : base(Target)
+	public UnrealPSK(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		

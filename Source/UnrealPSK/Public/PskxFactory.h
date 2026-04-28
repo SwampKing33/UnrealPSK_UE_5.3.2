@@ -5,7 +5,7 @@
 #include "PskxFactory.generated.h"
 
 UCLASS()
-class UNREALPSKPSA_API UPskxFactory : public UFactory
+class UNREALPSK_API UPskxFactory : public UFactory
 {
 	GENERATED_BODY()
 public:
@@ -20,7 +20,7 @@ public:
 	}
 	
 	static UObject* Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString>
-						   MaterialNameToPathMap);
+						   MaterialNameToPathMap, bool bCreateMaterialInstances = true);
 
 protected:
 	UClass* FactoryClass = UStaticMesh::StaticClass();
@@ -35,6 +35,6 @@ protected:
 	
 	virtual UObject* FactoryCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const FString& Filename, const TCHAR* Params, FFeedbackContext* Warn, bool& bOutOperationCanceled) override
 	{
-		return Import(Filename, InParent, FName(*InName.ToString().Replace(TEXT("_LOD0"), TEXT(""))), Flags, TMap<FString, FString>());
+		return Import(Filename, InParent, FName(*InName.ToString().Replace(TEXT("_LOD0"), TEXT(""))), Flags, TMap<FString, FString>(), true);
 	}
 };

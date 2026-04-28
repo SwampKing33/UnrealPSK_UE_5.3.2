@@ -1,17 +1,17 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "UnrealPSKPSA.h"
+#include "UnrealPSK.h"
 
-#define LOCTEXT_NAMESPACE "FUnrealPSKPSAModule"
+#define LOCTEXT_NAMESPACE "FUnrealPSKModule"
 
-DEFINE_LOG_CATEGORY(LogUnrealPSKPSA);
+DEFINE_LOG_CATEGORY(LogUnrealPSK);
 
-void FUnrealPSKPSAModule::StartupModule()
+void FUnrealPSKModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
 }
 
-void FUnrealPSKPSAModule::ShutdownModule()
+void FUnrealPSKModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
@@ -19,4 +19,4 @@ void FUnrealPSKPSAModule::ShutdownModule()
 
 #undef LOCTEXT_NAMESPACE
 	
-IMPLEMENT_MODULE(FUnrealPSKPSAModule, UnrealPSKPSA)
+IMPLEMENT_MODULE(FUnrealPSKModule, UnrealPSK)

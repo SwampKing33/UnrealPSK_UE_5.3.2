@@ -2,7 +2,7 @@
 
 #include <fstream>
 
-#include "UnrealPSKPSA.h"
+#include "UnrealPSK.h"
 
 FPskReader::FPskReader(const FString& Filepath)
 {
@@ -20,9 +20,9 @@ FPskReader::FPskReader(const FString& Filepath)
 		FPskHeader Header(Ar);
 		const auto Name = Header.ChunkName;
 		const auto Count = Header.Count;
-		const auto Size = Header.Count;
+		const auto Size = Header.Size;
 
-		UE_LOG(LogUnrealPSKPSA, Log, TEXT("%s: %d"), *Name, Count);
+		UE_LOG(LogUnrealPSK, Log, TEXT("%s: %d"), *Name, Count);
 		
 		if (Name.Equals("PNTS0000"))
 		{

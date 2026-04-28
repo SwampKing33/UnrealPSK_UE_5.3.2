@@ -21,7 +21,7 @@ public:
 	}
 };
 
-class UNREALPSKPSA_API FPskReader
+class UNREALPSK_API FPskReader
 {
 public:
 	FPskReader(const FString& Filepath);

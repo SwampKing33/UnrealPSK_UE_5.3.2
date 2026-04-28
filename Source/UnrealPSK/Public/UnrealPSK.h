@@ -5,9 +5,9 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogUnrealPSKPSA, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogUnrealPSK, Log, All);
 
-class FUnrealPSKPSAModule : public IModuleInterface
+class FUnrealPSKModule : public IModuleInterface
 {
 public:
 

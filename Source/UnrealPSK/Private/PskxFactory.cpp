@@ -1,14 +1,17 @@
 ﻿#include "PskxFactory.h"
 
-#include "PskPsaUtils.h"
+#include "PskUtils.h"
 #include "PskReader.h"
 #include "RawMesh.h"
 #include "Materials/MaterialInstanceConstant.h"
 
-UObject* UPskxFactory::Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString> MaterialNameToPathMap)
+UObject* UPskxFactory::Import(const FString& Filename, UObject* Parent, const FName Name, const EObjectFlags Flags, TMap<FString, FString> MaterialNameToPathMap, bool bCreateMaterialInstances)
 {
 	auto Data = FPskReader(Filename);
 	if (!Data.bIsValid) return nullptr;
+	const FString RootAssetName = Name.ToString();
+	const FString ImportFolder = FPskUtils::ResolveImportFolder(Parent, RootAssetName);
+	const FString RootAssetPackagePath = FPskUtils::ResolveRootAssetPackagePath(Parent, RootAssetName);
 	
 	TArray<FColor> VertexColorsByPoint;
 	VertexColorsByPoint.Init(FColor::Black, Data.VertexColors.Num());
@@ -57,24 +60,28 @@ UObject* UPskxFactory::Import(const FString& Filename, UObject* Parent, const FN
 		}
 	}
 	
-	const auto StaticMesh = FPskPsaUtils::LocalCreate<UStaticMesh>(UStaticMesh::StaticClass(), Parent, Name.ToString(), Flags);
+	const auto StaticMesh = FPskUtils::LocalCreateInPackage<UStaticMesh>(UStaticMesh::StaticClass(), RootAssetPackagePath, RootAssetName, Flags);
 
 	for (auto i = 0; i < Data.Materials.Num(); i++)
 	{
 		auto PskMaterial = Data.Materials[i];
-		
-		UObject* MatParent;
-		auto FoundMaterialPath = MaterialNameToPathMap.Find(PskMaterial.MaterialName);
-		if (FoundMaterialPath != nullptr)
+
+		UMaterialInstanceConstant* MaterialAdd = nullptr;
+		if (bCreateMaterialInstances)
 		{
-			MatParent = CreatePackage(**FoundMaterialPath);
+			UObject* MatParent;
+			auto FoundMaterialPath = MaterialNameToPathMap.Find(PskMaterial.MaterialName);
+			if (FoundMaterialPath != nullptr)
+			{
+				MatParent = CreatePackage(**FoundMaterialPath);
+			}
+			else
+			{
+				MatParent = CreatePackage(*FPaths::Combine(ImportFolder, PskMaterial.MaterialName));
+			}
+
+			MaterialAdd = FPskUtils::LocalFindOrCreateInPackage<UMaterialInstanceConstant>(UMaterialInstanceConstant::StaticClass(), MatParent->GetPathName(), PskMaterial.MaterialName, Flags);
 		}
-		else
-		{
-			MatParent = Parent;
-		}
-		
-		auto MaterialAdd = FPskPsaUtils::LocalFindOrCreate<UMaterialInstanceConstant>(UMaterialInstanceConstant::StaticClass(), MatParent, PskMaterial.MaterialName, Flags);
 
 		StaticMesh->GetStaticMaterials().Add(FStaticMaterial(MaterialAdd));
 		StaticMesh->GetSectionInfoMap().Set(0, i, FMeshSectionInfo(i));
